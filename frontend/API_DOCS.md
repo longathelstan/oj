@@ -1,217 +1,220 @@
-# Django API v2 Documentation
+# Thống kê các endpoint của VNOJ (backend Django)
 
-This document outlines the available API endpoints provided by the Django backend. All endpoints are prefixed with `/api/v2/`.
+Báo cáo sau tổng hợp các endpoint (route) do hệ thống VNOJ (fork từ
+DMOJ) cung cấp. Bảng liệt kê được chia theo nhóm chức năng chính như xác
+thực, người dùng, bài tập, nộp bài, cuộc thi, tổ chức, v.v. Mỗi endpoint
+bao gồm: phương thức HTTP, đường dẫn (pattern), tham số đầu vào
+(query/body/path), dữ liệu trả về (HTML hoặc JSON), và thông tin xác
+thực (có yêu cầu đăng nhập hay không). Các tuyến được dùng trong giao
+diện gốc (template HTML) được ghi chú để tham khảo.
 
----
+## Đăng nhập / Tài khoản (Auth)
 
-## 1. Contests
+Các endpoint liên quan đến quản lý phiên người dùng:
 
-### GET `/api/v2/contests`
+  ----------------------------------------------------------------------------------------------------
+  Phương   Đường dẫn                      Tham số đầu vào       Đầu ra (kết quả)            Yêu cầu
+  thức                                                                                      xác thực
+  -------- ------------------------------ --------------------- --------------------------- ----------
+  GET,     `/accounts/login/`             **body:** `username`, Trang đăng nhập (HTML). Khi Không
+  POST                                    `password` (và `next` `POST` hợp lệ sẽ redirect   (dùng
+                                          nếu redirect)         tới trang chỉ định.         session)
 
-Retrieves a paginated list of visible contests.
+  GET      `/accounts/logout/`            --                    Thực hiện logout và         Có (phiên
+                                                                redirect (thường về trang   hợp lệ)
+                                                                chủ).                       
 
-**Query Parameters:**
-- `is_rated` (boolean): Filter contests by whether they are rated.
-- `key` (string, multiple): Filter contests by a list of keys (e.g., `?key=contest1&key=contest2`).
-- `tag` (string, multiple): Filter contests by a list of tags.
-- `organization` (integer, multiple): Filter contests by a list of organization IDs.
+  GET,     `/accounts/register/`          **body:**             Trang đăng ký tài khoản     Không
+  POST                                    `full_name`,          (HTML). `POST` tạo tài      
+                                          `username`, `email`,  khoản mới, sau đó redirect. 
+                                          `password1`,                                      
+                                          `password2`,                                      
+                                          `timezone`,                                       
+                                          `default_language`,                               
+                                          `affiliations`...                                 
 
-**Example Response:**
-```json
-{
-  "api_version": "2.0",
-  "method": "get",
-  "fetched": "...",
-  "data": {
-    "current_object_count": 1,
-    "objects_per_page": 50,
-    "page_index": 1,
-    "has_more": false,
-    "objects": [
-      {
-        "key": "contest_key",
-        "name": "Contest Name",
-        "start_time": "...",
-        "end_time": "...",
-        "time_limit": 10800.0,
-        "is_rated": true,
-        "rate_all": false,
-        "tags": ["tag1", "tag2"]
-      }
-    ]
-  }
-}
-```
+  GET,     `/accounts/password/change/`   **body:** mật khẩu    Trang đổi mật khẩu (nếu     Có
+  POST                                    cũ, mật khẩu mới, xác có). Cần đăng nhập.         
+                                          nhận mật khẩu mới                                 
 
-### GET `/api/v2/contest/<contest_key>`
+  GET,     `/accounts/password/reset/`    **body:** email hoặc  Trang yêu cầu reset mật     Không
+  POST                                    username để reset mật khẩu (nếu hỗ trợ).          
+                                          khẩu                                              
+  ----------------------------------------------------------------------------------------------------
 
-Retrieves detailed information about a single contest.
+## Người dùng (User)
 
-**URL Parameters:**
-- `contest_key` (string): The unique key of the contest.
+Các endpoint hiển thị thông tin và hoạt động liên quan đến người dùng:
 
-**Example Response:**
-```json
-{
-  "api_version": "2.0",
-  "method": "get",
-  "fetched": "...",
-  "data": {
-    "object": {
-      "key": "contest_key",
-      "name": "Contest Name",
-      "start_time": "...",
-      "end_time": "...",
-      // ... other contest details ...
-      "problems": [
-        {
-          "points": 100,
-          "code": "PROBLEM_CODE",
-          "name": "Problem Name"
-        }
-      ],
-      "rankings": [
-        {
-          "user": "username",
-          "score": 100,
-          "cumulative_time": "..."
-        }
-      ]
-    }
-  }
-}
-```
+  ------------------------------------------------------------------------------------------------
+  Phương   Đường dẫn                        Tham số đầu   Đầu ra (kết quả)                 Yêu cầu
+  thức                                      vào                                            xác
+                                                                                           thực
+  -------- -------------------------------- ------------- -------------------------------- -------
+  GET      `/users/`                        `?page=<N>`   Danh sách người dùng             Không
+                                            (trang)       (Leaderboard) theo điểm. HTML    
+                                                          hiển thị bảng xếp hạng chung.    
 
----
+  GET      `/contributors/`                 `?page=<N>`   Danh sách các *contributor*      Không
+                                            (trang)       (người đóng góp). HTML hiển thị  
+                                                          bảng xếp hạng đóng góp.          
 
-## 2. Problems
+  GET      `/organizations/`                --            Danh sách tổ chức (organization) Không
+                                                          cùng điểm và số thành viên.      
+                                                          HTML.                            
 
-### GET `/api/v2/problems`
+  GET      `/user/<username>/`              Path:         Trang hồ sơ người dùng           Không
+                                            `username`    (Profile). Hiển thị thông tin cơ 
+                                                          bản, điểm, biểu tượng, v.v.      
 
-Retrieves a paginated list of visible problems.
+  GET      `/user/<username>/solved/`       Path:         Thống kê chi tiết: danh sách bài Không
+                                            `username`    đã giải (có điểm) của người      
+                                                          dùng. HTML hoặc JSON.            
 
-**Query Parameters:**
-- `partial` (boolean): Filter problems by whether they allow partial scores.
-- `code` (string, multiple): Filter by a list of problem codes.
-- `group` (string, multiple): Filter by a list of problem groups (e.g., `?group=Ad-Hoc`).
-- `type` (string, multiple): Filter by a list of problem types.
-- `organization` (integer, multiple): Filter by a list of organization IDs.
-- `search` (string): Perform a full-text search on problems.
+  GET      `/user/<username>/blog/`         Path:         Danh sách bài đăng (blog) của    Không
+                                            `username`    người dùng. HTML liệt kê các bài 
+                                                          viết đã đăng.                    
 
-### GET `/api/v2/problem/<problem_code>`
+  GET      `/user/<username>/statistics/`   Path:         (Nếu có) Thống kê thêm về người  Không
+                                            `username`    dùng, ví dụ lịch sử tính điểm,   
+                                                          biểu đồ, v.v. HTML.              
+  ------------------------------------------------------------------------------------------------
 
-Retrieves detailed information about a single problem.
+## Bài tập (Problems)
 
-**URL Parameters:**
-- `problem_code` (string): The unique code of the problem.
+  ------------------------------------------------------------------------------------------------------------
+  Phương   Đường dẫn                                Tham số đầu vào      Đầu ra (kết quả)              Yêu cầu
+  thức                                                                                                 xác
+                                                                                                       thực
+  -------- ---------------------------------------- -------------------- ----------------------------- -------
+  GET      `/problems/`                             `?page=<N>`, các     Trang danh sách bài tập       Không
+                                                    filter (tìm kiếm,    (HTML) với phân trang. Có     
+                                                    loại, category,      form tìm kiếm và bộ lọc.      
+                                                    has_editorial,...)                                 
 
----
+  GET      `/problem/<problem_code>/`               Path: `problem_code` Trang chi tiết một bài tập.   Không
+                                                                         Hiển thị đề bài, giới hạn,    
+                                                                         điểm, nút nộp, link đến       
+                                                                         submisisons, v.v.             
 
-## 3. Users
+  GET,     `/problem/<problem_code>/submit/`        **body:** mã nguồn   Trang nộp bài (form) và xử lý Có
+  POST                                              (`source_code`),     submission. `GET` hiển thị    (đăng
+                                                    ngôn ngữ             form, `POST` gửi code và      nhập)
+                                                    (`language`),        redirect về submission vừa    
+                                                    `[contest_id]` (nếu  tạo.                          
+                                                    nộp trong contest)                                 
 
-### GET `/api/v2/users`
+  GET      `/problem/<problem_code>/submissions/`   Path:                Danh sách tất cả các          Không
+                                                    `problem_code`,      submission cho bài này        
+                                                    `?page=<N>`, filter  (HTML). Có phân trang và bộ   
+                                                    (trạng thái, ngôn    lọc.                          
+                                                    ngữ, user, org)                                    
 
-Retrieves a paginated list of users.
+  GET      `/problem/<problem_code>/rank/`          Path: `problem_code` Bảng xếp hạng (Best           Không
+                                                                         solutions) của bài này.       
 
-**Query Parameters:**
-- `id` (integer, multiple): Filter by a list of user IDs.
-- `username` (string, multiple): Filter by a list of usernames.
-- `organization` (integer, multiple): Filter by a list of organization IDs the users belong to.
+  GET      `/problem/<problem_code>/statement/`     Path: `problem_code` Tải xuống đề bài (có thể là   Không
+                                                                         PDF) nếu có.                  
+  ------------------------------------------------------------------------------------------------------------
 
-### GET `/api/v2/user/<username>`
+## Nộp bài (Submissions)
 
-Retrieves detailed information about a single user.
+  -------------------------------------------------------------------------------------------------------
+  Phương   Đường dẫn                        Tham số đầu vào   Đầu ra (kết quả)               Yêu cầu xác
+  thức                                                                                       thực
+  -------- -------------------------------- ----------------- ------------------------------ ------------
+  GET      `/submissions/`                  `?page=<N>`,      Trang liệt kê các submission   Không
+                                            filter (trạng     toàn hệ thống (HTML). Có phân  
+                                            thái, ngôn ngữ,   trang và bộ lọc.               
+                                            problem, contest,                                
+                                            org, user, ...)                                  
 
-**URL Parameters:**
-- `username` (string): The username of the user.
+  GET      `/submissions/<page>/`           Path: `page` (số  Tương tự                       Không
+                                            trang)            `/submissions/?page=<page>`.   
 
-**Example Response:**
-```json
-{
-  // ...
-  "data": {
-    "object": {
-      "id": 1,
-      "username": "user1",
-      "points": 123.45,
-      "solved_problems": ["problem1", "problem2"],
-      "rating": 1500,
-      "contests": [
-        {
-          "key": "contest_key",
-          "score": 100,
-          "rating": 1550
-        }
-      ]
-    }
-  }
-}
-```
+  GET      `/submission/<submission_id>/`   Path:             Trang chi tiết một submission: Có (xem
+                                            `submission_id`   gồm mã nguồn, kết quả chấm,    submission
+                                                              thời gian chạy, memory, v.v.   của mình
+                                                              (HTML).                        hoặc có
+                                                                                             quyền)
+  -------------------------------------------------------------------------------------------------------
 
----
+## Cuộc thi (Contests)
 
-## 4. Submissions
+  ---------------------------------------------------------------------------------------------------------
+  Phương   Đường dẫn                                Tham số đầu vào   Đầu ra (kết quả)           Yêu cầu
+  thức                                                                                           xác thực
+  -------- ---------------------------------------- ----------------- -------------------------- ----------
+  GET      `/contests/`                             `?page=<N>`       Danh sách các cuộc thi     Không
+                                                    (trang), filter   (Upcoming & Past). HTML    
+                                                    (Upcoming/Past,   hiển thị thông tin.        
+                                                    private,...)                                 
 
-### GET `/api/v2/submissions`
+  GET      `/contests/YYYY/M/`                      Path: `YYYY`, `M` Lịch tổ chức contest theo  Không
+                                                    (tháng)           tháng. HTML.               
 
-Retrieves a paginated list of submissions.
+  GET      `/contests.ics`                          --                File ICS (Calendar).       Không
 
-**Query Parameters:**
-- `user` (string): Filter by username.
-- `problem` (string): Filter by problem code.
-- `id` (integer, multiple): Filter by a list of submission IDs.
-- `language` (string, multiple): Filter by a list of language keys (e.g., `?language=cpp17&language=py3`).
-- `result` (string, multiple): Filter by a list of result codes (e.g., `?result=AC&result=WA`).
+  GET      `/contest/<contest_slug>/`               Path:             Trang thông tin cuộc thi   Không (trừ
+                                                    `contest_slug`    (Info).                    private)
 
-### GET `/api/v2/submission/<submission_id>`
+  GET      `/contest/<contest_slug>/statistics/`    Path:             Thống kê chung contest     Có thể yêu
+                                                    `contest_slug`    (nếu có).                  cầu đăng
+                                                                                                 nhập
 
-Retrieves detailed information about a single submission. **Requires login.**
+  GET      `/contest/<contest_slug>/ranking/`       Path:             Bảng xếp hạng contest.     Không
+                                                    `contest_slug`                               
 
-**URL Parameters:**
-- `submission_id` (integer): The ID of the submission.
+  GET      `/contest/<contest_slug>/submissions/`   Path:             Danh sách submission trong Có thể yêu
+                                                    `contest_slug`,   contest.                   cầu đăng
+                                                    `?page=<N>`,                                 nhập
+                                                    filters                                      
+  ---------------------------------------------------------------------------------------------------------
 
-**Example Response:**
-```json
-{
-  // ...
-  "data": {
-    "object": {
-      "id": 12345,
-      "problem": "PROBLEM_CODE",
-      "user": "username",
-      "language": "cpp17",
-      "result": "AC",
-      "cases": [
-        {
-          "case_id": 1,
-          "status": "AC",
-          "time": 0.1,
-          "memory": 1024
-        }
-      ]
-    }
-  }
-}
-```
+## Tổ chức (Organizations)
 
----
+  ---------------------------------------------------------------------------------------------------
+  Phương   Đường dẫn                               Tham số đầu Đầu ra (kết quả)              Yêu cầu
+  thức                                             vào                                       xác thực
+  -------- --------------------------------------- ----------- ----------------------------- --------
+  GET      `/organizations/`                       --          Danh sách tất cả tổ chức, kèm Không
+                                                               điểm và số thành viên. HTML.  
 
-## 5. Other Endpoints
+  GET      `/organization/<org_id>/`               Path:       Trang chính của tổ chức.      Không
+                                                   `org_id`                                  (công
+                                                                                             khai)
 
-### GET `/api/v2/organizations`
+  GET      `/organization/<org_id>/users/`         Path:       Danh sách thành viên tổ chức  Không
+                                                   `org_id`    và xếp hạng. HTML.            
 
-Retrieves a list of organizations.
-- **Query Params**: `is_open` (boolean), `id` (integer, multiple).
+  GET      `/organization/<org_id>/problems/`      Path:       Các bài tập thuộc tổ chức.    Có
+                                                   `org_id`    HTML.                         (thành
+                                                                                             viên)
 
-### GET `/api/v2/participations`
+  GET      `/organization/<org_id>/contests/`      Path:       Các cuộc thi thuộc tổ chức.   Có
+                                                   `org_id`    HTML.                         (thành
+                                                                                             viên)
 
-Retrieves a list of contest participations.
-- **Query Params**: `contest` (string), `user` (string), `is_disqualified` (boolean).
+  GET      `/organization/<org_id>/submissions/`   Path:       Submission của tổ chức. HTML. Có
+                                                   `org_id`                                  (thành
+                                                                                             viên)
+  ---------------------------------------------------------------------------------------------------
 
-### GET `/api/v2/languages`
+## Trang chủ và trang khác
 
-Retrieves a list of available programming languages.
+  -----------------------------------------------------------------------------------------------------
+  Phương   Đường dẫn             Tham số đầu vào                  Đầu ra (kết quả)            Yêu cầu
+  thức                                                                                        xác thực
+  -------- --------------------- -------------------------------- --------------------------- ---------
+  GET      `/`                   `?show_all_blogs=[true/false]`   Trang chủ (newsfeed). Hiển  Không
+                                                                  thị tin tức, top users,     
+                                                                  contributors, blogs.        
 
-### GET `/api/v2/judges`
+  GET      `/custom_checkers/`   --                               Trang hướng dẫn viết custom Không
+                                                                  checker.                    
 
-Retrieves a list of online judge servers.
+  GET      `/status/`            --                               Trang trạng thái judge (nếu Không
+                                                                  có).                        
+
+  GET      `/rss/`, `/atom/`     --                               RSS/Atom feed.              Không
+  -----------------------------------------------------------------------------------------------------
